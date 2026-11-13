@@ -1,6 +1,6 @@
 # DSH 常用插件选型与实测
 
-本文记录本工作区实际安装并验证过的 DSH 插件。选型依据是插件市场官方注册表的热度数据（star 数与 30 天下载量）、能力声明和红线标记；每个插件都在当前 `web` profile 里装过，并做了功能验证。
+本文记录本工作区实际安装并验证过的 DSH 插件。选型依据是插件注册表的热度数据（star 数与 30 天下载量）、能力声明和红线标记；每个插件都在当前 `web` profile 里装过，验证深度因插件而异，见「副作用汇总」表的「验证到」列。
 
 ## 选型依据
 
@@ -49,7 +49,7 @@ star 4963，30 天下载 46 万。给 Web 端加一个 Context 仪表盘、一�
 
 实测：行 `dsh-context` 在合成树中，宿主里 `fiberPhase: active`。
 
-副作用：会读写 profile 目录下的数据来存上下文统计，并且有网络访问（`network`）。排查长会话的 token 花在哪时比较有用。
+副作用：声明了 `fs-write` 和 `network`，推测会在本地落盘上下文统计（未核实具体路径）。排查长会话的 token 花在哪时比较有用。
 
 ### dsh-better-sidebar —— 侧边栏工作台
 
@@ -59,7 +59,7 @@ star 5092，30 天下载 32 万。把文件树、编辑器、终端、Git、子�
 
 实测：行 `better-sidebar` 是 active；隔离宿主启动后，它的客户端半边出现在下发的 client manifest 里。
 
-副作用：带 `shell` 和 `host-runtime`，意味着它能在宿主进程里跑命令。这是本组里权限最宽的一个，装之前要想清楚。
+副作用：带 `shell` 和 `host-runtime`，意味着它能在宿主进程里跑命令。权限仅次于 dsh-remote，装之前要想清楚。
 
 注意它自带一条去重守卫：如果 Loader 里出现第二个同名但不同 id 的 `dsh-better-sidebar` 条目，这一行会自己停用。手工往 `cordis.patch.yml` 里插同一个插件，会让它自己关掉自己。
 
@@ -85,7 +85,7 @@ star 444，30 天下载 15.7 万。在设置里管理本地 DSH 技能，并只�
 
 ### @linxin666/dsh-client-ui-task-board —— 任务看板
 
-star 10357，是这批里 star 最高的。多列看板，卡片交给真实的 DSH 智能体会话执行，支持 cron 定时，且定时由 Host 侧到点执行，关掉浏览器也生效。
+star 10357。多列看板，卡片交给真实的 DSH 智能体会话执行，支持 cron 定时，且定时由 Host 侧到点执行，关掉浏览器也生效。
 
 能力：注册表里未声明能力（纯客户端 UI + Host 服务）。
 
@@ -101,13 +101,13 @@ star 60140，是整份注册表里 star 最高的插件。给 agent 加跨会话
 
 实测：插件挂载后注入了 `hindsight_*` 系列工具和一个 `hindsight-coding-agent` 技能。调用 `hindsight_list_pages` 返回的是后端的真实错误 —— `401 Authentication failed: API key required`。也就是说**链路是通的，缺的只是一个 API token**。
 
-副作用：这是本组里唯一一个把会话内容外发的插件 —— 记忆存在 Vectorize 的云服务（`api.hindsight.vectorize.io`）。没配 token 时它对每次工具调用都会失败一次。要本机优先的话得另外配置。
+副作用：会把会话内容外发（modlens 外发的是图片）—— 记忆存在 Vectorize 的云服务（`api.hindsight.vectorize.io`）。没配 token 时它对每次工具调用都会失败一次。要本机优先的话得另外配置。
 
 ### dsh-remote —— 多机远程工作区
 
 star 264，30 天下载 11.7 万。管理多台 SSH 主机，把远程目录镜像成本地文件夹，用工具操作。
 
-能力：`shell`、`fs-write`、`fs-read`、`network`、`credentials`、`env`、`host-runtime`。有 `credentials` 但注册表没判红线。
+能力：`shell`、`fs-write`、`fs-read`、`network`、`credentials`、`env`、`host-runtime`。有 `credentials` 也有 `network`，但注册表没判红线。
 
 实测：挂载后注入了 **21 个 `rw_*` 工具**（`rw_connect`、`rw_exec`、`rw_read_file`、`rw_upload`、`rw_sync`、`rw_forward` 等）。调用 `rw_info` 返回「本会话没有绑定远程工作区」，符合预期 —— 插件就位，只是还没连主机。
 
@@ -138,28 +138,28 @@ star 675，30 天下载 15 万。会话与当日 API 费用、预算进度、官
 
 能力：`shell`、`fs-write`、`fs-read`、`network`、`credentials`、`env`。**红线：读取凭据且能联网**。
 
-实测：装上了，行进入合成树。它的界面是对话标题栏的费用芯片，需要浏览器看。
+实测：只验证到合成层 —— 行进入了合成树，但界面（对话标题栏的费用芯片）需要浏览器看，未做运行层验证。
 
-副作用：要读 DeepSeek 的 API key 才能查余额，所以带凭据能力。它的 key 读取在本地完成，但红线标记提醒了组合风险。
+副作用：要读 DeepSeek 的 API key 才能查余额，所以带凭据能力。key 是否只在本地使用、只发往官方余额接口，没有核实；红线标记提醒的正是这种组合风险。
 
 ## 副作用汇总
 
-按能力从宽到窄排，判断装不装时看这张表比看功能描述更有效。
+按声明能力从宽到窄排，判断装不装时看这张表比看功能描述更有效。「验证到」对应前文三层：合成层只说明行进了合成树；已挂载说明宿主里 active；功能可用说明实际调用过插件功能。
 
-| 插件 | shell | fs 写 | 网络 | 凭据 | host-runtime | 红线 |
-| --- | :-: | :-: | :-: | :-: | :-: | --- |
-| dsh-better-sidebar | ● | ● | ● | | ● | 无 |
-| cc-safety-net | ● | ● | ● | ● | | 凭据+网络 |
-| dsh-remote | ● | ● | ● | ● | ● | 无 |
-| dsh-cost-meter | ● | ● | ● | ● | | 凭据+网络 |
-| @liustack/modlens | ● | ● | ● | | | 无 |
-| @michengai/dsh-skills-manager | ● | ● | ● | | ● | 无 |
-| dsh-context | | ● | ● | | | 无 |
-| dshmarket | | | | | | 无 |
-| @linxin666/dsh-client-ui-task-board | | | | | | 无 |
-| @vectorize-io/hindsight-coding-agents | | | | | | 无 |
+| 插件 | shell | fs 读 | fs 写 | 网络 | 凭据 | env | host-runtime | llm | 红线 | 验证到 |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | --- | --- |
+| dsh-remote | ● | ● | ● | ● | ● | ● | ● | | 未标（实为凭据+网络） | 工具可调用，未连主机 |
+| cc-safety-net | ● | ● | ● | ● | ● | ● | | | 凭据+网络 | 功能可用 |
+| dsh-cost-meter | ● | ● | ● | ● | ● | ● | | | 凭据+网络 | 合成层 |
+| dsh-better-sidebar | ● | ● | ● | ● | | ● | ● | | 无 | 已挂载 |
+| @michengai/dsh-skills-manager | ● | ● | ● | ● | | ● | ● | | 无 | 已挂载 |
+| @liustack/modlens | ● | ● | ● | ● | | ● | | ● | 无 | 功能可用 |
+| dsh-context | | ● | ● | ● | | ● | | | 无 | 已挂载 |
+| dshmarket | | | | | | | | | 无 | 已挂载（路由 401） |
+| @linxin666/dsh-client-ui-task-board | | | | | | | | | 无 | 功能可用 |
+| @vectorize-io/hindsight-coding-agents | | | | | | | | | 无 | 链路通，缺 API token |
 
-两个带红线的插件（`cc-safety-net`、`dsh-cost-meter`）都是「读凭据 + 能联网」的组合。这类组合的风险不在单个插件，而在链式后果：一旦有提示注入或工具滥用，凭据可能顺着网络出去。装之前想清楚是否必要。
+注册表标了红线的是 `cc-safety-net` 和 `dsh-cost-meter`，都是「读凭据 + 能联网」的组合。`dsh-remote` 能力上是同一组合，还能在远程主机执行任意命令，注册表却没标，实际风险可能是本组最高。这类组合的风险不在单个插件，而在链式后果：一旦有提示注入或工具滥用，凭据可能顺着网络出去。装之前想清楚是否必要。
 
 注意最后两行：`dsh-client-ui-task-board` 和 `hindsight-coding-agents` 在注册表里没有能力声明，**不等于它们没有能力**，只说明自动化审计没测出来。看板能开真实会话，hindsight 会把内容发到云端 —— 这些都不在能力矩阵里。
 
@@ -185,7 +185,7 @@ dsh --profile web --dump-config | grep -c '^- id: '
 
 - **先看红线，再看功能**。功能描述是作者写的，能力和红线是审计出来的。
 - **能力矩阵不完整**。没声明能力的插件不代表安全，只代表没测出能力。看板、记忆这类插件的实际影响要看它的行为。
-- **插件默认会拿到你 profile 的全部权限**。DSH 没有按插件隔离权限的机制，装一个带 `shell` 的插件等于给它宿主执行权。
+- **插件默认会拿到你 profile 的全部权限**。本次没有找到 DSH 按插件隔离权限的机制，装一个带 `shell` 的插件等于给它宿主执行权。
 - **批量安装后确认挂载状态**。清单里有不等于跑起来了，用 `entryId` 或工具列表确认。
-- **带凭据能力的插件要单独评估**。`cc-safety-net` 虽然是自己人，但它读的就是机密路径；它挡住别人的同时也站在最前面。
+- **带凭据能力的插件要单独评估**。`cc-safety-net` 虽然是防护类插件，但它读的就是机密路径；它挡住别人的同时也站在最前面。
 - `dshmarket` 里的一键安装等同于执行 `dsh plugin add`，装的都是第三方代码，速度不代表可信度。
